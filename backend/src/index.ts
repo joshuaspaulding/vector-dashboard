@@ -1,8 +1,10 @@
 import { handleWebSocket } from "./ws-handler";
 import { proxyGraphQL } from "./graphql-proxy";
+import { getConfig } from "./config";
 
-const VECTOR_API = "http://127.0.0.1:8686";
-const PORT = 3001;
+const config = getConfig();
+const VECTOR_API = config.vectorApi;
+const PORT = config.port;
 
 const server = Bun.serve({
   port: PORT,
@@ -61,7 +63,7 @@ const server = Bun.serve({
 
 function corsHeaders(): Record<string, string> {
   return {
-    "Access-Control-Allow-Origin": "http://localhost:5173",
+    "Access-Control-Allow-Origin": config.corsOrigin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
@@ -74,4 +76,4 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-console.log(`Vector Dashboard backend running on http://localhost:${PORT}`);
+console.log(`Vector Dashboard backend running on http://localhost:${config.port}`);

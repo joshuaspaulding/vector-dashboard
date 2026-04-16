@@ -1,0 +1,15 @@
+FROM oven/bun:latest
+
+WORKDIR /app
+
+COPY backend/package.json backend/bun.lockb* ./
+RUN bun install --frozen-lockfile
+
+COPY backend/src ./src
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+  CMD bun -e "fetch('http://localhost:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+
+CMD ["bun", "src/index.ts"]

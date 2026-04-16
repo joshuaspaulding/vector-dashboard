@@ -1,0 +1,12 @@
+[api]
+enabled = true
+address = "0.0.0.0:8686"
+graphql = true
+
+[sources.example_input]
+type = "internal_logs"
+
+[sinks.example_output]
+type = "console"
+inputs = ["example_input"]
+encoding.codec = "json"

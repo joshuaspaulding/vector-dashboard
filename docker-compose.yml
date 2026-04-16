@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  vector:
+    image: timberio/vector:latest
+    volumes:
+      - ./vector.toml:/etc/vector/vector.toml
+    ports:
+      - "8686:8686"
+    command: vector -c /etc/vector/vector.toml
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8686/graphql", "-H", "Content-Type: application/json", "-d", "{\"query\":\"{ health }\"}"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  dashboard-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "3001:3001"
+    environment:
+      - VECTOR_API=http://vector:8686
+      - PORT=3001
+      - CORS_ORIGIN=http://localhost:5173
+    depends_on:
+      vector:
+        condition: service_healthy
+    networks:
+      - default
+
+  dashboard-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - dashboard-backend
+    networks:
+      - default
+
+networks:
+  default:
+    name: vector-dashboard
+    driver: bridge

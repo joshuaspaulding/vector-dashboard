@@ -1,0 +1,107 @@
+{
+  "family": "vector-with-dashboard",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "vector",
+      "image": "timberio/vector:latest",
+      "portMappings": [
+        {
+          "containerPort": 8686,
+          "protocol": "tcp"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/vector-dashboard",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "vector"
+        }
+      },
+      "mountPoints": [
+        {
+          "sourceVolume": "vector-config",
+          "containerPath": "/etc/vector"
+        }
+      ]
+    },
+    {
+      "name": "dashboard-backend",
+      "image": "YOUR_AWS_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/vector-dashboard-backend:latest",
+      "portMappings": [
+        {
+          "containerPort": 3001,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "VECTOR_API",
+          "value": "http://localhost:8686"
+        },
+        {
+          "name": "PORT",
+          "value": "3001"
+        },
+        {
+          "name": "CORS_ORIGIN",
+          "value": "https://yourdomain.com"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/vector-dashboard",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "dashboard-backend"
+        }
+      },
+      "dependsOn": [
+        {
+          "containerName": "vector",
+          "condition": "START"
+        }
+      ]
+    },
+    {
+      "name": "dashboard-frontend",
+      "image": "YOUR_AWS_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/vector-dashboard-frontend:latest",
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/vector-dashboard",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "dashboard-frontend"
+        }
+      },
+      "dependsOn": [
+        {
+          "containerName": "dashboard-backend",
+          "condition": "START"
+        }
+      ]
+    }
+  ],
+  "volumes": [
+    {
+      "name": "vector-config",
+      "configVolumeConfiguration": {
+        "configName": "vector-config"
+      }
+    }
+  ],
+  "taskRoleArn": "arn:aws:iam::YOUR_AWS_ACCOUNT:role/ecsTaskRole",
+  "executionRoleArn": "arn:aws:iam::YOUR_AWS_ACCOUNT:role/ecsTaskExecutionRole"
+}

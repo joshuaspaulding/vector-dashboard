@@ -6,11 +6,11 @@ A real-time observability dashboard for [Vector](https://vector.dev) pipelines. 
 
 **Topology view** — interactive graph showing pipeline components and live throughput:
 
-![Topology view](screenshot-topology.png)
+![Topology view](screenshot-topology-v2.png)
 
 **Top view** — `vector top`-style table with per-component event rates:
 
-![Top view](screenshot-top.png)
+![Top view](screenshot-top-v2.png)
 
 ## Features
 

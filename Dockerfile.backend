@@ -2,9 +2,6 @@ FROM oven/bun:latest
 
 WORKDIR /app
 
-COPY backend/package.json backend/bun.lockb* ./
-RUN bun install --frozen-lockfile
-
 COPY backend/src ./src
 
 EXPOSE 3001

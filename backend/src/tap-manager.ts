@@ -1,87 +1,152 @@
 import type { ServerWebSocket } from "bun";
+import { getConfig } from "./config";
+
+const MAX_SIMULTANEOUS_TAPS = 5;
 
 interface TapSession {
-  proc: ReturnType<typeof Bun.spawn>;
+  ws: WebSocket;
   componentId: string;
 }
 
-const MAX_SIMULTANEOUS_TAPS = 5;
 const activeTaps = new Map<string, TapSession>();
 
-export function startTap(componentId: string, ws: ServerWebSocket<unknown>): void {
+// outputEventsByComponentIdPatterns returns Log | Metric | Trace | EventNotification
+// Log/Trace: use string(encoding: JSON) for full event. Metric: name+value fields.
+const TAP_SUBSCRIPTION = `
+  subscription Tap($patterns: [String!]!, $interval: Int!) {
+    outputEventsByComponentIdPatterns(outputsPatterns: $patterns, interval: $interval) {
+      __typename
+      ... on Log {
+        componentId
+        string(encoding: JSON)
+      }
+      ... on Metric {
+        componentId
+        name
+        valueType
+        value
+      }
+      ... on Trace {
+        componentId
+        string(encoding: JSON)
+      }
+      ... on EventNotification {
+        notification {
+          __typename
+          ... on Matched { pattern }
+          ... on NotMatched { pattern }
+          ... on InvalidMatch { pattern invalidMatches }
+        }
+        message
+      }
+    }
+  }
+`;
+
+export function startTap(componentId: string, clientWs: ServerWebSocket<unknown>): void {
   if (activeTaps.has(componentId)) {
-    ws.send(JSON.stringify({ type: "tap_error", componentId, message: "Tap already active for this component" }));
+    clientWs.send(JSON.stringify({ type: "tap_error", componentId, message: "Tap already active for this component" }));
     return;
   }
 
   if (activeTaps.size >= MAX_SIMULTANEOUS_TAPS) {
-    ws.send(JSON.stringify({ type: "tap_error", componentId, message: "Maximum simultaneous taps reached" }));
+    clientWs.send(JSON.stringify({ type: "tap_error", componentId, message: "Maximum simultaneous taps reached" }));
     return;
   }
 
-  let proc: ReturnType<typeof Bun.spawn>;
-  try {
-    proc = Bun.spawn(["vector", "tap", "--component-id", componentId, "--format", "json"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to spawn vector tap";
-    ws.send(JSON.stringify({ type: "tap_error", componentId, message }));
-    return;
-  }
+  const config = getConfig();
+  const vectorWsUrl = config.vectorApi.replace(/^http/, "ws") + "/graphql";
 
-  activeTaps.set(componentId, { proc, componentId });
+  // graphql-transport-ws is the protocol async-graphql (Vector) uses
+  const vectorWs = new WebSocket(vectorWsUrl, "graphql-transport-ws");
 
-  // Stream stdout line by line
-  (async () => {
-    const reader = proc.stdout.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
+  vectorWs.onopen = () => {
+    vectorWs.send(JSON.stringify({ type: "connection_init" }));
+  };
 
+  vectorWs.onmessage = (evt) => {
+    let msg: { type: string; id?: string; payload?: unknown };
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      msg = JSON.parse(evt.data as string);
+    } catch {
+      return;
+    }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
+    if (msg.type === "connection_ack") {
+      vectorWs.send(JSON.stringify({
+        id: "1",
+        type: "subscribe",
+        payload: {
+          query: TAP_SUBSCRIPTION,
+          variables: { patterns: [componentId], interval: 500 },
+        },
+      }));
+    } else if (msg.type === "next") {
+      const payload = msg.payload as { data?: { outputEventsByComponentIdPatterns?: unknown[] } };
+      const items = payload?.data?.outputEventsByComponentIdPatterns;
+      if (!Array.isArray(items)) return;
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          try {
-            const event = JSON.parse(trimmed);
-            ws.send(JSON.stringify({ type: "tap_event", componentId, event }));
-          } catch {
-            // Skip non-JSON lines (e.g. Vector startup messages)
+      for (const item of items) {
+        const ev = item as Record<string, unknown>;
+        const typename = ev.__typename as string | undefined;
+
+        if (typename === "EventNotification") {
+          const notif = ev.notification as Record<string, unknown> | undefined;
+          // Only surface non-match notifications as errors; Matched is informational
+          if (notif?.__typename !== "Matched") {
+            clientWs.send(JSON.stringify({ type: "tap_error", componentId, message: ev.message }));
           }
+        } else if (typename === "Log" || typename === "Trace") {
+          // string(encoding: JSON) returns the full event as a JSON string
+          const raw = ev.string as string | undefined;
+          const event = raw ? JSON.parse(raw) : ev;
+          clientWs.send(JSON.stringify({ type: "tap_event", componentId, event }));
+        } else if (typename === "Metric") {
+          clientWs.send(JSON.stringify({ type: "tap_event", componentId, event: ev }));
         }
       }
-    } catch {
-      // WebSocket likely closed
-    } finally {
-      activeTaps.delete(componentId);
-      try {
-        ws.send(JSON.stringify({ type: "tap_end", componentId }));
-      } catch {
-        // WebSocket already closed
-      }
+    } else if (msg.type === "error") {
+      const errs = msg.payload as { message: string }[];
+      const message = Array.isArray(errs) ? errs[0]?.message : "Tap subscription error";
+      clientWs.send(JSON.stringify({ type: "tap_error", componentId, message }));
+      cleanup(componentId);
+    } else if (msg.type === "complete") {
+      clientWs.send(JSON.stringify({ type: "tap_end", componentId }));
+      cleanup(componentId);
     }
-  })();
+  };
+
+  vectorWs.onerror = () => {
+    clientWs.send(JSON.stringify({ type: "tap_error", componentId, message: "Lost connection to Vector API" }));
+    cleanup(componentId);
+  };
+
+  vectorWs.onclose = () => {
+    if (activeTaps.has(componentId)) {
+      clientWs.send(JSON.stringify({ type: "tap_end", componentId }));
+      cleanup(componentId);
+    }
+  };
+
+  activeTaps.set(componentId, { ws: vectorWs, componentId });
 }
 
-export function stopTap(componentId: string): void {
+function cleanup(componentId: string): void {
   const session = activeTaps.get(componentId);
   if (session) {
-    session.proc.kill();
+    // Send complete to gracefully unsubscribe before closing
+    try { session.ws.send(JSON.stringify({ id: "1", type: "complete" })); } catch { /* ignore */ }
+    try { session.ws.close(); } catch { /* already closed */ }
     activeTaps.delete(componentId);
   }
 }
 
+export function stopTap(componentId: string): void {
+  cleanup(componentId);
+}
+
 export function stopAllTaps(): void {
   for (const [id] of activeTaps) {
-    stopTap(id);
+    cleanup(id);
   }
 }

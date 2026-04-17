@@ -2,18 +2,18 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { gql, METRICS_QUERY } from "../lib/graphql";
 import type { ComponentMetrics } from "../lib/types";
 
-interface RawComponentMetrics {
-  id: string;
+interface RawNode {
+  componentId: string;
   metrics: {
-    receivedEventsTotal: { total: number };
-    sentEventsTotal: { total: number };
-    utilization: number | null;
-    errorsTotal: { total: number };
+    receivedEventsTotal: { receivedEventsTotal: number };
+    sentEventsTotal: { sentEventsTotal: number };
   };
 }
 
 interface MetricsData {
-  components: RawComponentMetrics[];
+  sources: { edges: { node: RawNode }[] };
+  transforms: { edges: { node: RawNode }[] };
+  sinks: { edges: { node: RawNode }[] };
 }
 
 // Rolling 60-sample history per component
@@ -36,33 +36,34 @@ export function useMetrics(intervalMs = 1000) {
       const now = new Map<string, ComponentMetrics>();
       const newHistory = new Map<string, MetricsHistory>();
 
-      for (const c of data.components) {
-        const received = c.metrics.receivedEventsTotal?.total ?? 0;
-        const sent = c.metrics.sentEventsTotal?.total ?? 0;
-        const prev = prevTotals.current.get(c.id);
+      const allNodes = [...data.sources.edges, ...data.transforms.edges, ...data.sinks.edges];
+      for (const { node: c } of allNodes) {
+        const received = c.metrics.receivedEventsTotal?.receivedEventsTotal ?? 0;
+        const sent = c.metrics.sentEventsTotal?.sentEventsTotal ?? 0;
+        const id = c.componentId;
+        const prev = prevTotals.current.get(id);
 
         const receivedPerSecond = prev ? Math.max(0, received - prev.received) / (intervalMs / 1000) : 0;
         const sentPerSecond = prev ? Math.max(0, sent - prev.sent) / (intervalMs / 1000) : 0;
 
-        prevTotals.current.set(c.id, { received, sent });
+        prevTotals.current.set(id, { received, sent });
 
-        now.set(c.id, {
-          componentId: c.id,
+        now.set(id, {
+          componentId: id,
           receivedEventsTotal: received,
           sentEventsTotal: sent,
-          utilization: c.metrics.utilization ?? null,
-          errorsTotal: c.metrics.errorsTotal?.total ?? 0,
+          utilization: null,
+          errorsTotal: 0,
           receivedPerSecond,
           sentPerSecond,
         });
 
-        // Append to history
         setHistory(prev => {
-          const h = prev.get(c.id) ?? { receivedPerSecond: [], sentPerSecond: [], utilization: [] };
-          return new Map(prev).set(c.id, {
+          const h = prev.get(id) ?? { receivedPerSecond: [], sentPerSecond: [], utilization: [] };
+          return new Map(prev).set(id, {
             receivedPerSecond: [...h.receivedPerSecond, receivedPerSecond].slice(-HISTORY_SIZE),
             sentPerSecond: [...h.sentPerSecond, sentPerSecond].slice(-HISTORY_SIZE),
-            utilization: [...h.utilization, c.metrics.utilization ?? null].slice(-HISTORY_SIZE),
+            utilization: [...h.utilization, null].slice(-HISTORY_SIZE),
           });
         });
       }

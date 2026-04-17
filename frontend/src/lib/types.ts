@@ -4,7 +4,7 @@ export interface VectorComponent {
   id: string;
   kind: ComponentKind;
   componentType: string;
-  inputs: { id: string }[];
+  inputs: { id: string }[];  // id = componentId of the upstream component
 }
 
 export interface ComponentMetrics {

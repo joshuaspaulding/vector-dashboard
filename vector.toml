@@ -3,10 +3,54 @@ enabled = true
 address = "0.0.0.0:8686"
 graphql = true
 
-[sources.example_input]
-type = "internal_logs"
+# Source: continuous demo log stream (10 events/sec)
+[sources.raw_logs]
+type = "demo_logs"
+format = "json"
+interval = 0.1
 
-[sinks.example_output]
+# Transform 1: enrich — derive level from HTTP status, add metadata
+[transforms.enrich]
+type = "remap"
+inputs = ["raw_logs"]
+source = '''
+  .processed_at = now()
+  http = parse_json!(.message)
+  status = to_int(http.status) ?? 200
+  .level = if status >= 500 { "error" } else if status >= 400 { "warn" } else { "info" }
+  .http_status = status
+  if !exists(.service) { .service = "vector-demo" }
+'''
+
+# Transform 2: filter HTTP 4xx/5xx (errors/warnings)
+[transforms.filter_errors]
+type = "filter"
+inputs = ["enrich"]
+condition = '.level == "error" || .level == "warn"'
+
+# Transform 3: filter HTTP 2xx/3xx (normal traffic)
+[transforms.filter_info]
+type = "filter"
+inputs = ["enrich"]
+condition = '.level == "info"'
+
+# Transform 4: tag error events with alert severity
+[transforms.tag_errors]
+type = "remap"
+inputs = ["filter_errors"]
+source = '''
+  .alert = true
+  .alert_severity = if .level == "error" { "high" } else { "medium" }
+'''
+
+# Sink A: errors/warnings (with alert metadata)
+[sinks.error_sink]
 type = "console"
-inputs = ["example_input"]
+inputs = ["tag_errors"]
+encoding.codec = "json"
+
+# Sink B: info/debug events
+[sinks.info_sink]
+type = "console"
+inputs = ["filter_info"]
 encoding.codec = "json"

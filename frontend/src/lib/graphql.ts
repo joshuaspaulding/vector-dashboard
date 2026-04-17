@@ -18,26 +18,17 @@ export async function gql<T>(query: string, variables?: Record<string, unknown>)
 
 export const TOPOLOGY_QUERY = /* GraphQL */ `
   query Topology {
-    components {
-      id
-      kind
-      componentType
-      inputs { id }
-    }
+    sources { edges { node { componentId componentType } } }
+    transforms { edges { node { componentId componentType sources { componentId } transforms { componentId } } } }
+    sinks { edges { node { componentId componentType sources { componentId } transforms { componentId } } } }
   }
 `;
 
 export const METRICS_QUERY = /* GraphQL */ `
   query Metrics {
-    components {
-      id
-      metrics {
-        receivedEventsTotal { total }
-        sentEventsTotal { total }
-        utilization
-        errorsTotal { total }
-      }
-    }
+    sources { edges { node { componentId metrics { receivedEventsTotal { receivedEventsTotal } sentEventsTotal { sentEventsTotal } } } } }
+    transforms { edges { node { componentId metrics { receivedEventsTotal { receivedEventsTotal } sentEventsTotal { sentEventsTotal } } } } }
+    sinks { edges { node { componentId metrics { receivedEventsTotal { receivedEventsTotal } sentEventsTotal { sentEventsTotal } } } } }
   }
 `;
 

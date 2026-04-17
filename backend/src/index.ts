@@ -25,7 +25,7 @@ const server = Bun.serve({
 
     // GraphQL proxy
     if (url.pathname === "/graphql" && req.method === "POST") {
-      return proxyGraphQL(req, VECTOR_API);
+      return proxyGraphQL(req, VECTOR_API, config.corsOrigin);
     }
 
     // Health check

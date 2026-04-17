@@ -18,18 +18,18 @@ export function MetricsSparkline({ history }: Props) {
         <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
           <defs>
             <linearGradient id="colorReceived" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4} />
-              <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+              <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+              <stop offset="5%" stopColor="#facc15" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#facc15" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <Area type="monotone" dataKey="received" stroke="#22c55e" fill="url(#colorReceived)" strokeWidth={1.5} dot={false} />
-          <Area type="monotone" dataKey="sent" stroke="#3b82f6" fill="url(#colorSent)" strokeWidth={1.5} dot={false} />
+          <Area type="monotone" dataKey="received" stroke="#2dd4bf" fill="url(#colorReceived)" strokeWidth={1.5} dot={false} />
+          <Area type="monotone" dataKey="sent" stroke="#facc15" fill="url(#colorSent)" strokeWidth={1.5} dot={false} />
           <Tooltip
-            contentStyle={{ background: "#1e293b", border: "none", borderRadius: "4px", fontSize: "11px", color: "#e2e8f0" }}
+            contentStyle={{ background: "#222", border: "1px solid #383838", borderRadius: "4px", fontSize: "11px", color: "#d4d4d4", fontFamily: "monospace" }}
             labelFormatter={() => ""}
             formatter={(value: number, name: string) => [`${value}/s`, name]}
           />

@@ -15,8 +15,8 @@ import { ComponentNode } from "./ComponentNode";
 import type { VectorComponent } from "../lib/types";
 import type { ComponentMetrics } from "../lib/types";
 
-const NODE_WIDTH = 160;
-const NODE_HEIGHT = 100;
+const NODE_WIDTH = 170;
+const NODE_HEIGHT = 110;
 
 const nodeTypes = { component: ComponentNode };
 
@@ -58,7 +58,7 @@ function layoutGraph(components: VectorComponent[], metricsMap: Map<string, Comp
       source: input.id,
       target: c.id,
       animated: true,
-      style: { stroke: "#4b5563", strokeWidth: 1.5 },
+      style: { stroke: "#555", strokeWidth: 1.5 },
     }))
   );
 
@@ -115,16 +115,17 @@ export function TopologyGraph({ components, metricsMap, selectedId, onSelect }: 
       onNodeClick={(_, node) => onSelect(node.id)}
       fitView
       colorMode="dark"
-      className="bg-gray-950"
+      className="bg-[#1a1a1a]"
     >
-      <Background color="#374151" gap={20} />
-      <Controls className="!bg-gray-800 !border-gray-700" />
+      <Background color="#2a2a2a" gap={24} size={1.5} />
+      <Controls className="!bg-[#222] !border-[#383838]" />
       <MiniMap
         nodeColor={n => {
           const kind = (n.data as { kind: string }).kind;
-          return kind === "source" ? "#22c55e" : kind === "sink" ? "#f59e0b" : "#3b82f6";
+          return kind === "source" ? "#2dd4bf" : kind === "sink" ? "#f87171" : "#facc15";
         }}
-        className="!bg-gray-800 !border-gray-700"
+        maskColor="rgba(26,26,26,0.75)"
+        className="!bg-[#222] !border-[#383838]"
       />
     </ReactFlow>
   );

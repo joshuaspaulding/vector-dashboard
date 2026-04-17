@@ -1,6 +1,6 @@
-export async function proxyGraphQL(req: Request, vectorApi: string): Promise<Response> {
+export async function proxyGraphQL(req: Request, vectorApi: string, corsOrigin: string): Promise<Response> {
   const corsHeaders = {
-    "Access-Control-Allow-Origin": "http://localhost:5173",
+    "Access-Control-Allow-Origin": corsOrigin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
